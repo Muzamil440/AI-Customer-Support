@@ -2,6 +2,8 @@
 
 import { Box, Button, Stack, TextField } from '@mui/material';
 import { useRef, useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -16,73 +18,53 @@ export default function Home() {
 
   const sendMessage = async () => {
     if (!message.trim() || isLoading) return;
+
+    const userMessage = message;
+    setMessage('');
     setIsLoading(true);
 
-    setMessage('');
-    setMessages((messages) => [
+    const updatedMessages = [
       ...messages,
-      { role: 'user', content: message },
-      { role: 'assistant', content: '' },
-    ]);
+      { role: 'user', content: userMessage },
+    ];
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: message }],
-        }),
-      });
+    setMessages(updatedMessages);
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error(
-            'Quota exceeded or rate limit reached. Please try again later.',
-          );
-        } else {
-          throw new Error('Network response was not ok');
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: updatedMessages }),
+    })
+      .then((res) => res.json())
+      .then(async (data) => {
+        setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+
+        const chars = data.message.split('');
+
+        for (let i = 0; i < chars.length; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+
+          setMessages((prev) => {
+            const updated = [...prev];
+
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: updated[updated.length - 1].content + chars[i],
+            };
+
+            return updated;
+          });
         }
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        setMessages((messages) => {
-          let lastMessage = messages[messages.length - 1];
-          let otherMessages = messages.slice(0, messages.length - 1);
-          return [
-            ...otherMessages,
-            { ...lastMessage, content: lastMessage.content + text },
-          ];
-        });
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      setMessages((messages) => [
-        ...messages,
-        {
-          role: 'assistant',
-          content:
-            error.message ||
-            "I'm sorry, but I encountered an error. Please try again later.",
-        },
-      ]);
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleKeyPress = (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      sendMessage();
-    }
+      })
+      .catch(() => {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'Error occurred.' },
+        ]);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   const messagesEndRef = useRef(null);
@@ -92,32 +74,102 @@ export default function Home() {
   };
 
   useEffect(() => {
-    scrollToBottom();
+    setTimeout(() => {
+      scrollToBottom();
+    }, 50);
   }, [messages]);
+
+  const handleKeyPress = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  };
 
   return (
     <Box
-      width="100vw"
-      height="100vh"
-      display="flex"
-      flexDirection="column"
-      justifyContent="center"
-      alignItems="center"
+      sx={{
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        background:
+          'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #2563eb 100%)',
+        p: 2,
+      }}
     >
       <Stack
-        direction={'column'}
-        width="500px"
-        height="700px"
-        border="1px solid black"
-        p={2}
-        spacing={3}
+        sx={{
+          width: {
+            xs: '100%',
+            sm: '90%',
+            md: '700px',
+          },
+          height: '85vh',
+          background: 'rgba(255,255,255,0.08)',
+          backdropFilter: 'blur(18px)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: '24px',
+          overflow: 'hidden',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+        }}
       >
+        <Box
+          sx={{
+            p: 3,
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.05)',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+            }}
+          >
+            <Box
+              sx={{
+                width: 50,
+                height: 50,
+                borderRadius: '50%',
+                bgcolor: '#2563eb',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontWeight: 'bold',
+              }}
+            >
+              AI
+            </Box>
+
+            <Box>
+              <h3 style={{ margin: 0, color: 'white' }}>
+                Headstarter AI Support
+              </h3>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: '#94a3b8',
+                  fontSize: '14px',
+                }}
+              >
+                Online • Ready to help
+              </p>
+            </Box>
+          </Box>
+        </Box>
         <Stack
-          direction={'column'}
           spacing={2}
           flexGrow={1}
           overflow="auto"
-          maxHeight="100%"
+          sx={{
+            p: 3,
+            bgcolor: 'transparent',
+          }}
         >
           {messages.map((message, index) => (
             <Box
@@ -128,22 +180,62 @@ export default function Home() {
               }
             >
               <Box
-                bgcolor={
-                  message.role === 'assistant'
-                    ? 'primary.main'
-                    : 'secondary.main'
-                }
-                color="white"
-                borderRadius={16}
-                p={3}
+                sx={{
+                  maxWidth: '75%',
+                  px: 4,
+                  py: 2,
+                  borderRadius: 4,
+                  background:
+                    message.role === 'assistant'
+                      ? 'rgba(255,255,255,0.12)'
+                      : 'linear-gradient(135deg,#2563eb,#3b82f6)',
+                  color: 'white',
+                  boxShadow:
+                    message.role === 'assistant'
+                      ? 'none'
+                      : '0 8px 20px rgba(37,99,235,0.4)',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                  whiteSpace: 'pre-wrap',
+                }}
               >
-                {message.content}
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {message.content}
+                </ReactMarkdown>
               </Box>
             </Box>
           ))}
+          {/* {isLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <Box
+                sx={{
+                  p: 4,
+                  borderRadius: 4,
+                  background: 'rgba(255,255,255,0.12)',
+                  color: 'white',
+                  display: 'flex',
+                  gap: 1,
+                  alignItems: 'center',
+                }}
+              >
+                <span>AI is thinking</span>
+                <span className="dot" />
+                <span className="dot" />
+                <span className="dot" />
+              </Box>
+            </Box>
+          )} */}
           <div ref={messagesEndRef} />
         </Stack>
-        <Stack direction={'row'} spacing={2}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            p: 3,
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.03)',
+          }}
+        >
           <TextField
             label="Message"
             fullWidth
@@ -152,27 +244,26 @@ export default function Home() {
             onKeyPress={handleKeyPress}
             disabled={isLoading}
             sx={{
-              bgcolor: '#F5F5F5', // Light gray background color
-              '& .MuiInputLabel-root': {
-                color: '#007BFF', // Blue color for the label
-              },
               '& .MuiOutlinedInput-root': {
-                borderRadius: '8px', // Apply border radius here
+                borderRadius: '16px',
+                color: 'white',
+                background: 'rgba(255,255,255,0.08)',
+
                 '& fieldset': {
-                  borderColor: '#007BFF', // Blue border color
+                  borderColor: 'rgba(255,255,255,0.2)',
                 },
+
                 '&:hover fieldset': {
-                  borderColor: '#0056b3', // Darker blue on hover
+                  borderColor: '#60a5fa',
                 },
+
                 '&.Mui-focused fieldset': {
-                  borderColor: '#0056b3', // Darker blue when focused
+                  borderColor: '#3b82f6',
                 },
               },
-              '& .MuiInputBase-input': {
-                color: '#333', // Dark text color for readability
-              },
-              '& .Mui-disabled': {
-                color: '#888', // Gray color when disabled
+
+              '& .MuiInputLabel-root': {
+                color: '#cbd5e1',
               },
             }}
           />
@@ -181,8 +272,13 @@ export default function Home() {
             variant="contained"
             onClick={sendMessage}
             disabled={isLoading}
+            sx={{
+              borderRadius: '16px',
+              px: 4,
+              background: 'linear-gradient(135deg,#2563eb,#3b82f6)',
+            }}
           >
-            {isLoading ? 'Sending...' : 'Send'}
+            {isLoading ? 'Thinking...' : 'Send'}
           </Button>
         </Stack>
       </Stack>
